@@ -6,6 +6,9 @@ services:
     image: webdav-notepad:latest
     container_name: webdav-notepad
     restart: unless-stopped
+    volumes:
+      # 映射缓存目录
+      - ./cache:/app/.local_notes_cache
     ports:
       - "3000:3000"
     environment:
