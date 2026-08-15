@@ -1,0 +1,6 @@
+{
+  "name": "WebDAV Web Notepad",
+  "description": "A full-stack Node.js network notepad backed by WebDAV storage, supporting rich text, images, videos, and attachment files.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
