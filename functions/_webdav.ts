@@ -1,18 +1,6 @@
 import { createClient, WebDAVClient } from 'webdav';
-import path from 'path';
-import fs from 'fs';
-import { Note, Attachment } from '../src/types';
 
-// In-memory or local file cache for high speed & fallback
-const LOCAL_STORAGE_DIR = path.join(process.cwd(), '.local_notes_cache');
-if (!fs.existsSync(LOCAL_STORAGE_DIR)) {
-  try {
-    fs.mkdirSync(LOCAL_STORAGE_DIR, { recursive: true });
-    fs.mkdirSync(path.join(LOCAL_STORAGE_DIR, 'attachments'), { recursive: true });
-  } catch (err) {
-    console.error('Failed to create local cache dir', err);
-  }
-}
+export type { WebDAVClient };
 
 export function normalizePath(p: string): string {
   if (!p) return '/';
@@ -25,7 +13,6 @@ export function normalizePath(p: string): string {
 export function createDavClient(url: string, username?: string, password?: string): WebDAVClient | null {
   if (!url) return null;
   try {
-    // Sanitize URL
     let cleanUrl = url.trim();
     if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
       cleanUrl = 'https://' + cleanUrl;
@@ -99,8 +86,8 @@ export async function testWebDAVConnection(url: string, username?: string, passw
   }
 }
 
-export async function fetchAllNotes(client: WebDAVClient | null, subPath: string = '/WebDAV-Notes'): Promise<Note[]> {
-  const notes: Note[] = [];
+export async function fetchAllNotes(client: WebDAVClient | null, subPath: string = '/WebDAV-Notes'): Promise<any[]> {
+  const notes: any[] = [];
   const cleanPath = normalizePath(subPath);
 
   if (client) {
@@ -124,95 +111,57 @@ export async function fetchAllNotes(client: WebDAVClient | null, subPath: string
           }
         }
       }
-      // Return notes sorted by updatedAt desc
       return notes.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     } catch (err) {
-      console.warn('WebDAV fetch failed, falling back to local cache:', (err as Error).message);
+      console.warn('WebDAV fetch failed:', (err as Error).message);
     }
   }
 
-  // Local fallback
-  try {
-    const files = fs.readdirSync(LOCAL_STORAGE_DIR);
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const fullPath = path.join(LOCAL_STORAGE_DIR, file);
-        const data = fs.readFileSync(fullPath, 'utf-8');
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed && parsed.id) {
-            notes.push(parsed);
-          }
-        } catch (_) {}
-      }
-    }
-  } catch (err) {
-    console.error('Error reading local cache:', err);
-  }
-
-  return notes.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  return notes;
 }
 
 export async function saveNoteToWebDAV(
   client: WebDAVClient | null,
-  note: Note,
+  note: any,
   subPath: string = '/WebDAV-Notes'
 ): Promise<boolean> {
+  if (!client) return false;
+
   const cleanPath = normalizePath(subPath);
   const fileName = `note_${note.id}.json`;
   const remoteFilePath = normalizePath(`${cleanPath}/${fileName}`);
-  const localFilePath = path.join(LOCAL_STORAGE_DIR, fileName);
   const jsonContent = JSON.stringify(note, null, 2);
 
-  // Always save to local cache
-  let localSaved = false;
   try {
-    fs.writeFileSync(localFilePath, jsonContent, 'utf-8');
-    localSaved = true;
-  } catch (err) {
-    console.error('Error writing local note cache:', err);
-  }
+    await initWebDAVStructure(client, subPath);
+    const encoder = new TextEncoder();
+    const buffer = encoder.encode(jsonContent);
+    await client.putFileContents(remoteFilePath, buffer, { overwrite: true });
+    return true;
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn(`Primary save note ${note.id} to ${remoteFilePath} notice (${errMsg}), retrying...`);
 
-  // Save to WebDAV
-  if (client) {
     try {
-      await initWebDAVStructure(client, subPath);
-      const buffer = Buffer.from(jsonContent, 'utf-8');
+      await client.customRequest(remoteFilePath, { method: 'UNLOCK' });
+    } catch (_) {}
+
+    try {
+      const encoder = new TextEncoder();
+      const buffer = encoder.encode(jsonContent);
       await client.putFileContents(remoteFilePath, buffer, { overwrite: true });
       return true;
-    } catch (err: any) {
-      const errMsg = err?.message || String(err);
-      console.warn(`Primary save note ${note.id} to ${remoteFilePath} notice (${errMsg}), attempting lock clearing & retry...`);
-
-      // If locked (423) or error occurs, try custom UNLOCK request on the remote file
-      try {
-        await client.customRequest(remoteFilePath, { method: 'UNLOCK' });
-      } catch (_) {}
-
-      try {
-        const buffer = Buffer.from(jsonContent, 'utf-8');
-        await client.putFileContents(remoteFilePath, buffer, { overwrite: true });
-        return true;
-      } catch (retryErr: any) {
-        const retryMsg = retryErr?.message || String(retryErr);
-        console.warn(`Fallback save note ${note.id} to WebDAV notice:`, retryMsg);
-
-        // If local file was written, treat as successful save so client doesn't error
-        if (localSaved) {
-          return true;
-        }
-        return false;
-      }
+    } catch (retryErr: any) {
+      const retryMsg = retryErr?.message || String(retryErr);
+      console.warn(`Fallback save note ${note.id} to WebDAV notice:`, retryMsg);
+      return false;
     }
   }
-
-  return true;
 }
 
-export function extractMediaFilenamesFromNote(note: Note): Set<string> {
+export function extractMediaFilenamesFromNote(note: any): Set<string> {
   const filenames = new Set<string>();
 
-  // 1. From note.attachments array
   if (Array.isArray(note.attachments)) {
     for (const att of note.attachments) {
       if (att.filename) {
@@ -226,7 +175,6 @@ export function extractMediaFilenamesFromNote(note: Note): Set<string> {
     }
   }
 
-  // 2. From note.content markdown text using regex
   if (note.content) {
     const regex = /\/api\/media\/([a-zA-Z0-9_.-]+)/g;
     let match;
@@ -245,34 +193,20 @@ export async function deleteAttachmentFromWebDAV(
   filename: string,
   subPath: string = '/WebDAV-Notes'
 ): Promise<boolean> {
-  const cleanPath = normalizePath(subPath);
-  const localAttachPath = path.join(LOCAL_STORAGE_DIR, 'attachments', filename);
+  if (!client) return false;
 
-  // Delete local file cache
-  if (fs.existsSync(localAttachPath)) {
-    try {
-      fs.unlinkSync(localAttachPath);
-    } catch (err) {
-      console.error(`Error deleting local attachment file ${filename}:`, err);
+  try {
+    const cleanPath = normalizePath(subPath);
+    const remoteAttachPath = normalizePath(`${cleanPath}/attachments/${filename}`);
+    const exists = await client.exists(remoteAttachPath);
+    if (exists) {
+      await client.deleteFile(remoteAttachPath);
     }
+    return true;
+  } catch (err) {
+    console.error(`Failed to delete attachment ${filename} from WebDAV:`, err);
+    return false;
   }
-
-  // Delete remote file on WebDAV
-  if (client) {
-    try {
-      const remoteAttachPath = normalizePath(`${cleanPath}/attachments/${filename}`);
-      const exists = await client.exists(remoteAttachPath);
-      if (exists) {
-        await client.deleteFile(remoteAttachPath);
-      }
-      return true;
-    } catch (err) {
-      console.error(`Failed to delete attachment ${filename} from WebDAV:`, err);
-      return false;
-    }
-  }
-
-  return true;
 }
 
 export async function deleteNoteFromWebDAV(
@@ -280,24 +214,24 @@ export async function deleteNoteFromWebDAV(
   noteId: string,
   subPath: string = '/WebDAV-Notes'
 ): Promise<boolean> {
+  if (!client) return false;
+
   const cleanPath = normalizePath(subPath);
   const fileName = `note_${noteId}.json`;
   const remoteFilePath = normalizePath(`${cleanPath}/${fileName}`);
-  const localFilePath = path.join(LOCAL_STORAGE_DIR, fileName);
 
-  // Clean up associated attachments if they are not referenced by any other note
   try {
     const allNotes = await fetchAllNotes(client, subPath);
-    const targetNote = allNotes.find((n) => n.id === noteId);
+    const targetNote = allNotes.find((n: any) => n.id === noteId);
 
     if (targetNote) {
       const targetFilenames = extractMediaFilenamesFromNote(targetNote);
       if (targetFilenames.size > 0) {
-        const otherNotes = allNotes.filter((n) => n.id !== noteId);
+        const otherNotes = allNotes.filter((n: any) => n.id !== noteId);
         const otherFilenames = new Set<string>();
         for (const other of otherNotes) {
           const files = extractMediaFilenamesFromNote(other);
-          files.forEach((f) => otherFilenames.add(f));
+          files.forEach((f: string) => otherFilenames.add(f));
         }
 
         for (const filename of targetFilenames) {
@@ -311,46 +245,31 @@ export async function deleteNoteFromWebDAV(
     console.error(`Error cleaning up attachments for note ${noteId}:`, attErr);
   }
 
-  // Remove local cache file
-  if (fs.existsSync(localFilePath)) {
-    try {
-      fs.unlinkSync(localFilePath);
-    } catch (err) {
-      console.error('Error deleting local cache file:', err);
+  try {
+    const exists = await client.exists(remoteFilePath);
+    if (exists) {
+      await client.deleteFile(remoteFilePath);
     }
+    return true;
+  } catch (err) {
+    console.error(`Failed to delete note ${noteId} from WebDAV:`, err);
+    return false;
   }
-
-  if (client) {
-    try {
-      const exists = await client.exists(remoteFilePath);
-      if (exists) {
-        await client.deleteFile(remoteFilePath);
-      }
-      return true;
-    } catch (err) {
-      console.error(`Failed to delete note ${noteId} from WebDAV:`, err);
-      return false;
-    }
-  }
-
-  return true;
 }
 
 export async function uploadAttachmentToWebDAV(
   client: WebDAVClient | null,
-  fileBuffer: Buffer,
+  fileBuffer: ArrayBuffer,
   originalName: string,
   mimeType: string,
   subPath: string = '/WebDAV-Notes'
-): Promise<Attachment> {
-  const ext = path.extname(originalName) || '';
+): Promise<any> {
+  const ext = originalName.split('.').pop() ? '.' + originalName.split('.').pop()! : '';
   const fileId = Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
   const safeFilename = `${fileId}${ext}`;
   const cleanPath = normalizePath(subPath);
   const remoteAttachPath = normalizePath(`${cleanPath}/attachments/${safeFilename}`);
-  const localAttachPath = path.join(LOCAL_STORAGE_DIR, 'attachments', safeFilename);
 
-  // Determine media type
   let mediaCategory: 'image' | 'video' | 'file' = 'file';
   if (mimeType.startsWith('image/')) {
     mediaCategory = 'image';
@@ -358,14 +277,6 @@ export async function uploadAttachmentToWebDAV(
     mediaCategory = 'video';
   }
 
-  // Save to local cache
-  try {
-    fs.writeFileSync(localAttachPath, fileBuffer);
-  } catch (err) {
-    console.error('Error saving local attachment:', err);
-  }
-
-  // Upload to WebDAV if available
   if (client) {
     try {
       await initWebDAVStructure(client, subPath);
@@ -378,7 +289,7 @@ export async function uploadAttachmentToWebDAV(
   return {
     id: fileId,
     name: originalName,
-    size: fileBuffer.length,
+    size: fileBuffer.byteLength,
     type: mediaCategory,
     mimeType,
     url: `/api/media/${safeFilename}`,
@@ -391,34 +302,16 @@ export async function getAttachmentFile(
   client: WebDAVClient | null,
   filename: string,
   subPath: string = '/WebDAV-Notes'
-): Promise<{ buffer: Buffer; mimeType?: string } | null> {
-  const localAttachPath = path.join(LOCAL_STORAGE_DIR, 'attachments', filename);
+): Promise<{ buffer: ArrayBuffer; mimeType?: string } | null> {
+  if (!client) return null;
 
-  // First try local cache
-  if (fs.existsSync(localAttachPath)) {
-    try {
-      const buffer = fs.readFileSync(localAttachPath);
-      return { buffer };
-    } catch (err) {
-      console.error('Error reading local attachment cache:', err);
-    }
-  }
-
-  // Next try WebDAV
-  if (client) {
-    try {
-      const cleanPath = normalizePath(subPath);
-      const remoteAttachPath = normalizePath(`${cleanPath}/attachments/${filename}`);
-      const contents = await client.getFileContents(remoteAttachPath, { format: 'binary' });
-      const buffer = Buffer.from(contents as ArrayBuffer);
-      // Save to local cache for subsequent fast reads
-      try {
-        fs.writeFileSync(localAttachPath, buffer);
-      } catch (_) {}
-      return { buffer };
-    } catch (err) {
-      console.error(`Error fetching attachment ${filename} from WebDAV:`, err);
-    }
+  try {
+    const cleanPath = normalizePath(subPath);
+    const remoteAttachPath = normalizePath(`${cleanPath}/attachments/${filename}`);
+    const contents = await client.getFileContents(remoteAttachPath, { format: 'binary' });
+    return { buffer: contents as ArrayBuffer };
+  } catch (err) {
+    console.error(`Error fetching attachment ${filename} from WebDAV:`, err);
   }
 
   return null;

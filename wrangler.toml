@@ -1,0 +1,38 @@
+# Cloudflare Pages Configuration
+# For more information: https://developers.cloudflare.com/pages/configuration/wrangler-configuration/
+
+name = "webdav-notepad"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# =============================================================
+# Cloudflare KV Namespace Binding (缓存层)
+# =============================================================
+# 部署后需要两步：
+#
+# 1) 在 Cloudflare 控制台 -> Workers & Pages -> KV，创建一个 Namespace，
+#    随便取名，例如 "webdav-notepad-cache"，复制其 ID。
+#
+# 2) 在 Pages 项目 -> Settings -> Functions -> KV namespace bindings：
+#    Variable name 填:  NOTE_CACHE
+#    KV namespace    选:  你刚创建的那个 namespace
+#
+# 下方 [[kv_namespaces]] 仅用于 `wrangler pages dev` 本地预览（可选）。
+# [[kv_namespaces]]
+# binding = "NOTE_CACHE"
+# id = "<your-production-kv-namespace-id>"
+# preview_id = "<your-preview-kv-namespace-id>"
+
+# Environment variables (set these in Cloudflare Pages Dashboard -> Settings -> Environment variables)
+# Do NOT put actual secrets here. This is just for reference structure:
+#
+# [vars]
+# WEBDAV_URL = ""          # Your WebDAV server URL
+# WEBDAV_USERNAME = ""     # WebDAV username
+# WEBDAV_PASSWORD = ""     # WebDAV password
+# WEBDAV_PATH = "/WebDAV-Notes"  # Base path for notes storage
+# SITE_NAME = "云端网络记事本"    # Custom site name
+# AUTH_PASSWORD = ""       # Access password for the notepad (optional)
+# LOCK_PASSWORD = ""       # Alternative lock password (optional)
+# KV_CACHE_TTL = "3600"    # 缓存存活秒数，默认 1 小时（3600）

@@ -68,7 +68,7 @@ export default function App() {
       const res = await fetch('/api/config');
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = await res.json() as any;
         if (data) {
           setAppConfig({
             siteName: data.siteName || '云端网络记事本',
@@ -102,7 +102,7 @@ export default function App() {
       });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = await res.json() as any;
         if (data && data.notes) {
           setNotes(data.notes);
           if (data.notes.length > 0 && !activeNoteId) {
@@ -161,7 +161,7 @@ export default function App() {
           message: '后端 API 接口返回异常，请检查服务器连接或环境变量配置。',
         };
       }
-      const data = await res.json();
+      const data = await res.json() as any;
       if (data.success) {
         setIsAuthenticated(true);
         localStorage.setItem('webdav_notepad_token', data.token || 'auth_ok');
@@ -227,7 +227,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(noteToSave),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (data && data.success) {
         setWebdavConnected(true);
       }
@@ -285,7 +285,7 @@ export default function App() {
         headers: getAuthHeaders(),
         body: formData,
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (data && data.success && data.attachment) {
         return data.attachment;
       }
@@ -310,7 +310,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(cfg),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (data.success) {
         if (data.token) {
           localStorage.setItem('webdav_notepad_token', data.token);

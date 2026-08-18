@@ -57,7 +57,7 @@ export const WebDavSettingsModal: React.FC<Props> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, username, password, path: subPath }),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       setTestResult(data);
     } catch (err) {
       setTestResult({ success: false, message: '测试异常: 网络未能响应' });

@@ -7,7 +7,11 @@
     "lib": [
       "ES2022",
       "DOM",
-      "DOM.Iterable"
+      "DOM.Iterable",
+      "WebWorker"
+    ],
+    "types": [
+      "@cloudflare/workers-types"
     ],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -22,5 +26,11 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "server.ts",
+    "server",
+    "dist",
+    "node_modules"
+  ]
 }
