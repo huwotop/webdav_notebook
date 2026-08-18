@@ -7,9 +7,18 @@
 #   Settings → Environment variables
 #   Settings → Functions → KV namespace bindings
 #
-# ⚠️ 本文件保持下列极简内容即可，不要添加 name / [[kv_namespaces]] / [vars]
-#    等声明，否则 Cloudflare 控制台会锁定 Add binding 按钮并提示：
-#    「此项目的绑定在通过 wrangler.toml 进行管理」。
+# ⚠️ ⚠️ ⚠️  注意事项 ⚠️ ⚠️ ⚠️
+# 1️⃣ name 字段【必须】与 Cloudflare Pages 项目名称完全一致！
+#    打开 Pages 项目概览页 → 页面顶部 Project 名称下面显示的 slug
+#    （不是 GitHub 仓库名，不是 *.pages.dev 子域名，但通常和它们一致）
+#    如果名字不匹配，构建会报错：Project not found / name mismatch。
+#
+# 2️⃣ 【严禁】在此文件追加 [[kv_namespaces]] / [vars] / [[d1_databases]]
+#    等绑定声明段落。一旦出现这些段落，Cloudflare 会判定「此项目的
+#    绑定在通过 wrangler.toml 进行管理」，控制台的 Add binding 按钮
+#    就会被锁定。目前只有 name + 下面三行是安全的最小集合。
+
+name = "webdav-notepad"
 
 pages_build_output_dir = "dist"
 compatibility_date = "2024-01-01"

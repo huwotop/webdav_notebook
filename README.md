@@ -76,7 +76,18 @@ git push -u origin main
    - **Build output directory**：`dist`（自动填充）
 5. 其他地方无需改动，点击 **Save and Deploy**，等待第一次构建完成（通常 1 分钟内）
 
-构建成功后你会得到一个 `*.pages.dev` 的链接，现在还**不能用**，因为还没配置 WebDAV 和可选的 KV 缓存。
+构建成功后你会得到一个 `*.pages.dev` 的链接。**现在必须做一件事：对齐 wrangler.toml 里的项目名**。
+
+> ⚠️ **关键一步：设置 wrangler.toml 的 name**
+> Cloudflare Pages 强制要求 `wrangler.toml` 中的 `name` 字段与你刚创建的 Pages **项目名完全一致**（否则下一次构建会直接报错 `Missing top-level field "name"` 或 `Project not found`）。
+>
+> 1. 打开 Pages 项目概览页，在项目标题下方找到显示的 **Project name / slug**（就是你刚才在 Project name 输入框里填的那个，和子域名前缀一样，比如你填 `huwo-notepad` 这里就是 `huwo-notepad`）。
+> 2. 打开仓库根目录下的 `wrangler.toml`，修改 `name = "webdav-notepad"` 为你的实际项目名，比如：`name = "huwo-notepad"`。
+> 3. 提交并推送这个修改（或使用命令行 `git add wrangler.toml && git commit -m "chore: align wrangler.toml name with pages project" && git push`）。
+>
+> **注意**：此处只改 `name` 即可，**严禁在 wrangler.toml 追加 `[[kv_namespaces]]` / `[vars]` / `[[d1_databases]]` 等绑定声明**——否则会触发控制台「Add binding 被锁定」。
+
+现在还**不能正式使用**，先继续配置 WebDAV 和可选的 KV 缓存（配置完再一起重部署）。
 
 ---
 
@@ -100,13 +111,9 @@ git push -u origin main
 
 > ⚡ 若需要预览环境（Preview / `main` 分支的预发布）也使用缓存，前往同一个页面的 **Preview** 标签页按同样步骤添加绑定即可。
 
-> ❓ **如果 Add binding 按钮被锁并提示「此项目的绑定在通过 wrangler.toml 进行管理」**：说明仓库里的 `wrangler.toml` 被修改过。本项目自带的 [wrangler.toml](wrangler.toml) 只有三行生效代码，不会触发此问题；如果之前改过，请还原为仅包含：
-> ```toml
-> pages_build_output_dir = "dist"
-> compatibility_date = "2024-01-01"
-> compatibility_flags = ["nodejs_compat"]
-> ```
-> 然后推送到 GitHub，Cloudflare 会自动重新构建；或在 **Deployments** 标签对最新部署点 **···** → **Retry deployment**，完成后回到 Settings 页面即可解锁 Add binding。
+> ❓ **如果 Add binding 按钮被锁并提示「此项目的绑定在通过 wrangler.toml 进行管理」**：说明 `wrangler.toml` 里被加了 `[[kv_namespaces]]`、`[vars]` 等**绑定声明段落**（注意不是 `name` 字段，`name` 是安全的）。本项目自带的 [wrangler.toml](wrangler.toml) 只有 `name` + 三行运行时配置，**不会触发锁定**；若你改动过，请**删除所有 `[[kv_namespaces]]` / `[vars]` 段落**，保持 wrangler.toml 内容与仓库默认一致，然后推送到 GitHub 重新构建，Settings 页面即解锁。
+>
+> ❓ **如果构建报错「Missing top-level field "name" in configuration file」或「Project not found」**：说明 wrangler.toml 里没有 `name` 字段或 `name` 填的与 Cloudflare Pages 项目名不一致。参考步骤 2 结尾的「对齐 wrangler.toml 里的项目名」修正并推送即可。
 
 ---
 
