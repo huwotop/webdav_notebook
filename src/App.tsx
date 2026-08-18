@@ -25,6 +25,10 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [webdavConnected, setWebdavConnected] = useState<boolean>(false);
 
+  // Compute all unique folders/tags across all notes (shared by Sidebar filters and NoteEditor)
+  const allTags = Array.from(new Set(notes.flatMap((n) => n.tags || []))).filter(Boolean);
+  const allFolders = Array.from(new Set(notes.map((n) => n.folder).filter(Boolean))) as string[];
+
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState<boolean>(false);
@@ -403,6 +407,8 @@ export default function App() {
             onUploadFile={handleUploadFile}
             isSaving={isSaving}
             onToggleSidebarMobile={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            allFolders={allFolders}
+            allTags={allTags}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500 bg-white dark:bg-slate-950 transition-colors">

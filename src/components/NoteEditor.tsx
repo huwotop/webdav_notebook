@@ -86,6 +86,10 @@ interface Props {
   onUploadFile: (file: File) => Promise<Attachment | null>;
   isSaving: boolean;
   onToggleSidebarMobile?: () => void;
+  /** All unique folder names that already exist across notes (passed from parent App) */
+  allFolders?: string[];
+  /** All unique tag names that already exist across notes (passed from parent App) */
+  allTags?: string[];
 }
 
 // Auto fix headings without space after #, e.g. "#标题" -> "# 标题"
@@ -101,6 +105,8 @@ export const NoteEditor: React.FC<Props> = ({
   onUploadFile,
   isSaving,
   onToggleSidebarMobile,
+  allFolders = [],
+  allTags = [],
 }) => {
   // Default viewMode is 'preview' for existing notes, 'edit'/'split' for new notes
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
@@ -461,46 +467,160 @@ export const NoteEditor: React.FC<Props> = ({
         </div>
 
         {/* Folder & Tags Bar */}
-        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 pt-0.5 overflow-x-auto no-scrollbar">
-          {/* Folder Category */}
-          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700/60 shrink-0">
-            <Folder className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
-            <input
-              type="text"
-              value={folderInput}
-              onChange={(e) => setFolderInput(e.target.value)}
-              onBlur={(e) => handleFolderChange(e.target.value)}
-              placeholder="设置分类..."
-              className="bg-transparent text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none w-20 sm:w-28 text-xs"
-            />
-          </div>
-
-          {/* Tags list */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Tag className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
-            {(note.tags || []).map((t) => (
-              <span
-                key={t}
-                className="inline-flex items-center gap-1 bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700/60 shrink-0"
-              >
-                #{t}
+        <div className="text-xs text-slate-500 dark:text-slate-400 pt-0.5 space-y-2">
+          {/* Row 1: Active folder input + active tag chips + new tag input */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {/* Folder Category input */}
+            <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700/60 shrink-0">
+              <Folder className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
+              <input
+                type="text"
+                list={`folder-datalist-${note.id}`}
+                value={folderInput}
+                onChange={(e) => setFolderInput(e.target.value)}
+                onBlur={(e) => handleFolderChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                placeholder="设置分类..."
+                className="bg-transparent text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none w-28 sm:w-36 text-xs"
+              />
+              <datalist id={`folder-datalist-${note.id}`}>
+                {allFolders.map((f) => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
+              {folderInput && (
                 <button
-                  onClick={() => handleRemoveTag(t)}
-                  className="hover:text-rose-500 dark:hover:text-rose-400 p-0.5 transition-colors"
+                  onClick={() => {
+                    setFolderInput('');
+                    handleFolderChange('');
+                  }}
+                  title="清除分类"
+                  className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>
-              </span>
-            ))}
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleAddTag}
-              placeholder="+ 标签"
-              className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md px-2 py-0.5 text-xs focus:outline-none focus:border-indigo-500 w-20 sm:w-28"
-            />
+              )}
+            </div>
+
+            {/* Active Tags chips + add input */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Tag className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+              {(note.tags || []).map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1 bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700/60 shrink-0"
+                >
+                  #{t}
+                  <button
+                    onClick={() => handleRemoveTag(t)}
+                    className="hover:text-rose-500 dark:hover:text-rose-400 p-0.5 transition-colors"
+                    title={`移除标签 ${t}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                list={`tag-datalist-${note.id}`}
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleAddTag}
+                placeholder="+ 标签"
+                className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md px-2 py-0.5 text-xs focus:outline-none focus:border-indigo-500 w-28 sm:w-36"
+              />
+              <datalist id={`tag-datalist-${note.id}`}>
+                {allTags.filter((t) => !(note.tags || []).includes(t)).map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </div>
           </div>
+
+          {/* Row 2: Suggested existing folders + existing tags as clickable chips */}
+          {(allFolders.length > 0 || allTags.length > 0) && (
+            <div className="space-y-1.5 border-t border-slate-200/70 dark:border-slate-800 pt-2">
+              {/* Suggested folders */}
+              {allFolders.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase text-slate-400 dark:text-slate-500 shrink-0">已有分类:</span>
+                  {allFolders.map((f) => {
+                    const active = f === folderInput || f === note.folder;
+                    return (
+                      <button
+                        key={f}
+                        onClick={() => {
+                          if (active) {
+                            // Clicking the already-active folder clears it
+                            setFolderInput('');
+                            handleFolderChange('');
+                          } else {
+                            setFolderInput(f);
+                            handleFolderChange(f);
+                          }
+                        }}
+                        title={active ? `取消分类 ${f}` : `应用分类 ${f}`}
+                        className={`text-[11px] px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors max-w-full truncate border cursor-pointer ${
+                          active
+                            ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
+                            : 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30 hover:bg-blue-100 dark:hover:bg-blue-500/20'
+                        }`}
+                      >
+                        <Folder className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{f}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Suggested tags (unused ones shown as addable; used ones skipped since they appear in row 1) */}
+              {allTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase text-slate-400 dark:text-slate-500 shrink-0">已有标签:</span>
+                  {allTags.map((t) => {
+                    const inNote = (note.tags || []).includes(t);
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => {
+                          if (inNote) {
+                            handleRemoveTag(t);
+                          } else {
+                            // Programmatically add tag; simulate handleAddTag without input
+                            if (!(note.tags || []).includes(t)) {
+                              onUpdateNote({
+                                ...note,
+                                tags: [...(note.tags || []), t],
+                              });
+                            }
+                          }
+                        }}
+                        title={inNote ? `移除标签 ${t}` : `添加标签 ${t}`}
+                        className={`text-[11px] px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors max-w-full truncate border cursor-pointer ${
+                          inNote
+                            ? 'bg-indigo-600 text-white border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500'
+                            : 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 dark:hover:bg-indigo-500/20'
+                        }`}
+                      >
+                        <Tag className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{t}</span>
+                        {inNote ? (
+                          <X className="w-2.5 h-2.5 shrink-0 opacity-70" />
+                        ) : (
+                          <span className="opacity-70 shrink-0 font-bold leading-none">+</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Media & Formatting Toolbar (Mobile Touch Scrollable) */}
