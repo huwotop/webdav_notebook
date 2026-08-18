@@ -76,22 +76,24 @@ git push -u origin main
    - **Build output directory**：`dist`（自动填充）
 5. 其他地方无需改动，点击 **Save and Deploy**，等待第一次构建完成（通常 1 分钟内）
 
-构建成功后你会得到一个 `*.pages.dev` 的链接。**现在必须做一件事：对齐 wrangler.toml 里的项目名**。
-
-> ⚠️ **关键一步：设置 wrangler.toml 的 name**
-> Cloudflare Pages 强制要求 `wrangler.toml` 中的 `name` 字段与你刚创建的 Pages **项目名完全一致**（否则下一次构建会直接报错 `Missing top-level field "name"` 或 `Project not found`）。
->
-> 1. 打开 Pages 项目概览页，在项目标题下方找到显示的 **Project name / slug**（就是你刚才在 Project name 输入框里填的那个，和子域名前缀一样，比如你填 `huwo-notepad` 这里就是 `huwo-notepad`）。
-> 2. 打开仓库根目录下的 `wrangler.toml`，修改 `name = "webdav-notepad"` 为你的实际项目名，比如：`name = "huwo-notepad"`。
-> 3. 提交并推送这个修改（或使用命令行 `git add wrangler.toml && git commit -m "chore: align wrangler.toml name with pages project" && git push`）。
->
-> **注意**：此处只改 `name` 即可，**严禁在 wrangler.toml 追加 `[[kv_namespaces]]` / `[vars]` / `[[d1_databases]]` 等绑定声明**——否则会触发控制台「Add binding 被锁定」。
-
-现在还**不能正式使用**，先继续配置 WebDAV 和可选的 KV 缓存（配置完再一起重部署）。
+构建成功后会得到一个 `*.pages.dev` 的链接。此时**还不能正常使用**（缺少 Functions 兼容标志和 KV / 环境变量配置），先**不要关闭 Pages 控制台**，按下面的步骤 3 → 步骤 4 → 步骤 5 → 步骤 6 顺序在网页里依次配置。
 
 ---
 
-### 步骤 3：创建 KV 命名空间（可选，强烈推荐）
+### 步骤 3：配置 Pages Functions 兼容标志（必做 ⚠️）
+
+> ⚠️ 本项目依赖 `nodejs_compat` 兼容标志来运行 webdav 客户端（使用部分 Node.js 内置 API）。如果跳过这一步，进入记事本后调用任何 WebDAV 接口都会返回 500 错误。之前版本中这项配置写在 `wrangler.toml` 里，但为了让控制台 KV 绑定不被锁定，现改为**完全在控制台网页设置**。
+
+1. 回到 Pages 项目页 → **Settings** 标签 → 左侧菜单选择 **Functions**
+2. 在页面下方找到 **Compatibility flags** 区域（Compatibility flags）
+3. 下拉选 **Production** 环境 → 右侧输入框中输入：`nodejs_compat` → 点击 **Add**
+4. （可选，建议）再切换到 **Preview** 环境，同样把 `nodejs_compat` 添加进去
+5. 往下一点，在 **Compatibility date** 区域，确保 **Production** 的日期设置为 `2024-01-01`（或更新的日期都可以），**Preview** 同样设置
+6. 其他不要改动，Cloudflare 会自动保存
+
+---
+
+### 步骤 4：创建 KV 命名空间（可选，强烈推荐）
 
 为了启用**边缘缓存**，先创建一个 KV Namespace（不创建也不影响基础功能，所有请求将直接回源 WebDAV）：
 
@@ -101,26 +103,22 @@ git push -u origin main
 
 ---
 
-### 步骤 4：绑定 KV 到 Pages 项目
+### 步骤 5：绑定 KV + 配置环境变量
 
-1. 回到 Pages 项目页 → **Settings** 标签 → 左侧 **Functions** → **KV namespace bindings** → **Add binding**
+> 🎉 从这一步开始，所有配置都在 Settings 网页完成。
+> 仓库里已经**故意删除了 wrangler.toml 文件**，这样 Cloudflare Pages 判定为「控制台全托管模式」，**Add binding 按钮不会再被锁定**。
+
+#### 5.1 绑定 KV 缓存命名空间（若跳过步骤 4 可忽略）
+
+1. Pages 项目 → **Settings** → 左侧 **Functions** → **KV namespace bindings** → **Add binding**
 2. **Variable name**：`NOTE_CACHE` ⚠️ **必须完全一致**，代码通过这个名字读取
-3. **KV namespace**：下拉选中步骤 3 创建的 `webdav-notepad-cache`
-4. （Environment 选择 **Production** 即可）
-5. 点击 **Save** 保存
+3. **KV namespace**：下拉选中步骤 4 创建的 `webdav-notepad-cache`
+4. 环境选择 **Production** → 点 **Save**
+5. （可选）切到 **Preview** 环境同样绑定一次
 
-> ⚡ 若需要预览环境（Preview / `main` 分支的预发布）也使用缓存，前往同一个页面的 **Preview** 标签页按同样步骤添加绑定即可。
+#### 5.2 配置环境变量
 
-> ❓ **如果 Add binding 按钮被锁并提示「此项目的绑定在通过 wrangler.toml 进行管理」**：说明 `wrangler.toml` 里被加了 `[[kv_namespaces]]`、`[vars]` 等**绑定声明段落**（注意不是 `name` 字段，`name` 是安全的）。本项目自带的 [wrangler.toml](wrangler.toml) 只有 `name` + 三行运行时配置，**不会触发锁定**；若你改动过，请**删除所有 `[[kv_namespaces]]` / `[vars]` 段落**，保持 wrangler.toml 内容与仓库默认一致，然后推送到 GitHub 重新构建，Settings 页面即解锁。
->
-> ❓ **如果构建报错「Missing top-level field "name" in configuration file」或「Project not found」**：说明 wrangler.toml 里没有 `name` 字段或 `name` 填的与 Cloudflare Pages 项目名不一致。参考步骤 2 结尾的「对齐 wrangler.toml 里的项目名」修正并推送即可。
-
----
-
-### 步骤 5：配置环境变量
-
-前往 Pages 项目 → **Settings** → 左侧 **Environment variables** → **Production** → **Add variables**。
-
+前往 **Settings** → 左侧 **Environment variables** → **Production** → **Add variables**。
 所有变量**无需加任何前缀**（不需要 `VITE_`、`CF_`、`PAGES_`），直接按下方表格填写：
 
 | 变量名 | 必填 | 默认值 | 说明 |
@@ -133,7 +131,7 @@ git push -u origin main
 | `AUTH_PASSWORD` / `LOCK_PASSWORD` | 否 | *(留空)* | **访问/锁屏密码**。设置后访问网站需输入该密码才能进入，保障隐私。两者填任一即可；若都填优先使用 `AUTH_PASSWORD`。 |
 | `KV_CACHE_TTL` | 否 | `3600` | KV 缓存存活时间（秒）。默认 1 小时，改成 `86400` 即缓存一天。 |
 
-点击每一行的 **Add** 添加，填完后页面会显示你设置的所有变量列表。
+每填好一个点击 **Add**，填完后页面会显示完整变量列表。
 
 > 💡 **多人共享场景**：把 `WEBDAV_URL / WEBDAV_USERNAME / WEBDAV_PASSWORD` 全部**留空**，每位用户首次访问时在「设置」弹窗中输入**自己的** WebDAV 凭据即可——凭据以 **HttpOnly Cookie** 保存在对应浏览器会话中，服务端不持久化，多人共用一个 Pages 站点也不会串数据。
 
@@ -141,18 +139,18 @@ git push -u origin main
 
 ### 步骤 6：重新部署使配置生效
 
-⚠️ **重要**：在 Settings 里修改绑定或环境变量**不会触发重新构建**，必须重新部署一次，新的配置才会加载到 Functions 运行时。
+⚠️ **重要**：在 Settings 里修改兼容标志、绑定或环境变量**不会触发重新构建**，必须重新部署一次，新的配置才会真正加载到 Functions 运行时。
 
 操作路径（任选其一）：
 - **A. 推送一个空 commit**（推荐，最稳定）：
   ```bash
-  git commit --allow-empty -m "chore: reload pages env bindings"
+  git commit --allow-empty -m "chore: reload pages env bindings and compat flags"
   git push
   ```
-- **B. 控制台手动重试**：
+- **B. 控制台手动重试部署**：
   Pages 项目 → **Deployments** 标签 → 找到最新那一条成功的部署 → 点右侧 **···** → **Retry deployment**
 
-等部署进度条跑完、状态变绿色 **Active** 后，访问 `https://你的项目名.pages.dev`，如果设置了 `AUTH_PASSWORD` 会先进入锁屏页，输入即可进入记事本。🎉
+等部署进度条跑完、状态变为绿色 **Active** 后，访问 `https://你的项目名.pages.dev`。如果设置了 `AUTH_PASSWORD` 会先进入锁屏页，输入密码即可进入记事本。🎉
 
 ---
 
@@ -253,11 +251,10 @@ KV 免费额度：**100,000 次读 / 天、1,000 次写 / 天、1 GB 存储**，
 │   └── index.css                      #     ↳ Tailwind 样式
 ├── public/
 │   └── _redirects                     # SPA 路由回退规则（/* → /index.html 200）
-├── wrangler.toml                      # Pages 运行时配置（保持极简三行）
 ├── tsconfig.json
 ├── vite.config.ts
 ├── package.json
-├── .env.example                       # 环境变量示例（仅阅读参考，不生效）
+├── .env.example                       # 环境变量示例（仅阅读参考，不生效；实际值在 Pages 控制台设置）
 └── index.html                         # Vite HTML 入口
 ```
 
